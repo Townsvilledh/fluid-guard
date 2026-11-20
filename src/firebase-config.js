@@ -34,7 +34,10 @@ export const APP_CHECK_DEBUG_TOKEN = true;
 
 // Cloud model used for the opt-in deep analysis (overrides the SDK's default
 // hybrid fallback model, gemini-3.5-flash-lite, for that route only).
-export const DEEP_ANALYSIS_MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash is no longer available to new users on the Gemini
+// Developer API (the API returns 404 for it); gemini-3.8-flash is the
+// model the API itself directs new projects to.
+export const DEEP_ANALYSIS_MODEL = "gemini-3.8-flash";
 
 // reCAPTCHA site key for App Check in a production build (from the Firebase
 // console: Security -> App Check -> register the reCAPTCHA provider).
