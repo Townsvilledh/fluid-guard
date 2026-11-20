@@ -163,6 +163,10 @@ export function redact(text) {
   return text
     .replace(/https?:\/\/[^\s)]+/gi, "[link]")
     .replace(/\bwww\.[^\s)]+/gi, "[link]")
+    .replace(
+      /\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|xyz|site|online|info|app|dev|co|example|finance|exchange|pro|live|click|link|page|space|fun|club|vip|top|icu)\b(?:\/[^\s)]*)?/gi,
+      "[link]",
+    )
     .replace(/\b[\w.+-]+@[\w-]+\.[\w.]+\b/g, "[email]")
     .replace(/0x[0-9a-fA-F]{6,}/g, "[address]")
     .replace(/\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g, "[address]")
