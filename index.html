@@ -3,64 +3,224 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0b0d" />
+    <meta
+      name="description"
+      content="Fluid Guard — a scam and transaction explainer for wallet users that thinks on your device first: private, free and offline. Built with Firebase AI Logic hybrid inference."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Fluid Guard — on-device-first transaction &amp; scam explainer</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main class="app">
-      <header>
-        <h1>Fluid Guard</h1>
+    <div class="app">
+      <header class="app-header">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+            <path
+              d="M24 3 6 9v13c0 11.5 7.6 19.4 18 23 10.4-3.6 18-11.5 18-23V9L24 3z"
+              fill="none"
+              stroke="#f7931a"
+              stroke-width="3.5"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M17 24.5 22 29l9.5-11"
+              fill="none"
+              stroke="#f7931a"
+              stroke-width="3.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <h1>Fluid Guard</h1>
+        </div>
         <p class="tagline">
           Paste a transaction, an approval request, an address or a suspicious
           message. Guard explains the risk — <strong>on your device first</strong>,
           privately and offline. The cloud is only used when you ask for a deep
-          analysis.
+          analysis, and only with a summary you have seen and approved.
         </p>
+        <div class="pills" aria-label="App status">
+          <span id="pill-conn" class="pill">Connection: checking…</span>
+          <span id="pill-mode" class="pill">Mode: checking…</span>
+          <span id="pill-nano" class="pill">On-device model: checking…</span>
+        </div>
+        <div id="demo-banner" class="demo-banner" hidden>
+          <strong>Demo mode — Firebase is not configured.</strong>
+          Checks run on Guard's built-in local red-flag engine. No AI model is
+          called and nothing leaves this device. Add a Firebase project config
+          (see the README) to switch on Gemini Nano on-device inference and
+          cloud deep analysis.
+        </div>
       </header>
 
-      <section class="panel">
-        <label for="input">What are you about to sign or send?</label>
-        <textarea
-          id="input"
-          rows="7"
-          placeholder="Paste the transaction summary, approval request or message here…"
-        ></textarea>
-        <div class="fixtures">
-          <span>Try a demo fixture:</span>
-          <button type="button" data-fixture="approval">Malicious approval</button>
-          <button type="button" data-fixture="message">Drainer message</button>
-          <button type="button" data-fixture="plain">Ordinary transfer</button>
-        </div>
-        <button id="check" type="button" class="primary">Check this</button>
-        <p id="status" class="status" role="status"></p>
-      </section>
+      <div class="layout">
+        <main class="col-main">
+          <section class="panel" aria-labelledby="input-heading">
+            <h2 id="input-heading" class="panel-title">
+              What are you about to sign or send?
+            </h2>
+            <label class="visually-hidden" for="input">Transaction, approval request or message to check</label>
+            <textarea
+              id="input"
+              rows="7"
+              placeholder="Paste the transaction summary, approval request or message here…"
+            ></textarea>
+            <div class="fixtures">
+              <span class="fixtures-label">Try an example:</span>
+              <div id="fixtures" class="fixture-buttons"></div>
+            </div>
+            <button id="check" type="button" class="primary">Check this</button>
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+          </section>
 
-      <section id="result" class="panel result" hidden>
-        <div class="result-head">
-          <span id="verdict" class="verdict">—</span>
-          <span id="route-badge" class="badge">—</span>
-        </div>
-        <p id="explanation"></p>
-        <ul id="reasons"></ul>
-        <div id="deep" hidden>
-          <button id="deep-btn" type="button">Deep analysis (cloud)</button>
-          <p class="hint">
-            Deep analysis sends a <em>redacted summary only</em> — never your raw
-            input — to a cloud Gemini model. You will see exactly what is sent
-            before anything leaves this device.
+          <section id="result" class="panel result" hidden aria-labelledby="result-heading">
+            <h2 id="result-heading" class="visually-hidden">Check result</h2>
+            <div class="result-head">
+              <span id="verdict" class="verdict">—</span>
+              <span id="route-badge" class="badge">—</span>
+            </div>
+            <p id="route-note" class="route-note"></p>
+            <p id="explanation" class="explanation"></p>
+            <h3 class="sub-title">What Guard spotted</h3>
+            <ul id="reasons" class="reasons"></ul>
+
+            <div id="deep" class="deep" hidden>
+              <h3 class="sub-title">Deep analysis (cloud, opt-in)</h3>
+              <p class="hint">
+                A cloud Gemini model can dig deeper: what this actually does,
+                the worst case if you sign, and what to do next. It only ever
+                receives a <strong>redacted summary</strong> — addresses, links
+                and amounts replaced with placeholders — and only when you
+                approve the exact text below.
+              </p>
+              <button id="deep-prepare" type="button">
+                Show me exactly what would be sent
+              </button>
+              <div id="consent" class="consent" hidden>
+                <p class="consent-title">
+                  This is the exact text that would be sent to the cloud.
+                  Nothing else leaves this device.
+                </p>
+                <pre id="redacted" class="redacted"></pre>
+                <div class="consent-actions">
+                  <button id="deep-approve" type="button" class="primary">
+                    Approve &amp; run deep analysis
+                  </button>
+                  <button id="deep-cancel" type="button">Cancel</button>
+                </div>
+                <p id="deep-status" class="status" role="status" aria-live="polite"></p>
+              </div>
+              <div id="deep-result-wrap" class="deep-result" hidden>
+                <div class="result-head">
+                  <span class="deep-title">Deep analysis</span>
+                  <span id="deep-badge" class="badge in-cloud">Answered in the cloud</span>
+                </div>
+                <p id="deep-result"></p>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel about" aria-labelledby="about-heading">
+            <h2 id="about-heading" class="panel-title">Why hybrid?</h2>
+            <p>
+              Every other AI scam checker sends the sensitive data to a server
+              to be checked. Guard inverts that. The first pass — the one that
+              sees your raw addresses, approvals and messages — runs with the
+              Firebase AI Logic mode <code>ONLY_ON_DEVICE</code>, which throws
+              rather than falling back: the sensitive pass
+              <em>cannot</em> silently leave your device. It works offline and
+              costs nothing to run. The cloud is reserved for work that
+              genuinely needs a bigger model, and only ever sees a redacted
+              summary you approved.
+            </p>
+            <table class="routing-table">
+              <thead>
+                <tr>
+                  <th scope="col">Task</th>
+                  <th scope="col">Route</th>
+                  <th scope="col">SDK mode</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Risk classification (safe / caution / danger + reason codes)</td>
+                  <td>On-device — Gemini Nano</td>
+                  <td><code>ONLY_ON_DEVICE</code></td>
+                </tr>
+                <tr>
+                  <td>Plain-language explanation of the verdict</td>
+                  <td>On-device first</td>
+                  <td><code>PREFER_ON_DEVICE</code></td>
+                </tr>
+                <tr>
+                  <td>Deep analysis (opt-in, redacted summary only)</td>
+                  <td>Cloud — Gemini</td>
+                  <td><code>ONLY_IN_CLOUD</code></td>
+                </tr>
+                <tr>
+                  <td>Follow-up questions (multi-turn chat)</td>
+                  <td>Cloud — Gemini, labelled as cloud</td>
+                  <td><code>ONLY_IN_CLOUD</code></td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="hint">
+              The badge on every answer reports the SDK's real
+              <code>inferenceSource</code> for that call — not a guess, and not
+              a label the app applies to itself. When no model route is
+              available, Guard says so and falls back to its built-in red-flag
+              checks rather than failing silently.
+            </p>
+          </section>
+        </main>
+
+        <aside class="panel routing-panel" aria-labelledby="routing-heading">
+          <h2 id="routing-heading" class="panel-title">Routing — this session</h2>
+          <p id="route-summary" class="route-summary">
+            No checks yet. Every AI call Guard makes will be listed here with
+            the mode it requested and the route that actually answered.
           </p>
-          <div id="deep-result"></div>
-        </div>
-      </section>
+          <ul id="route-log" class="route-log"></ul>
+          <h3 class="sub-title">How to read this</h3>
+          <ul class="mode-list">
+            <li>
+              <strong>On-device</strong> — Gemini Nano answered inside your
+              browser. Nothing was sent anywhere; it works offline.
+            </li>
+            <li>
+              <strong>In cloud</strong> — a cloud Gemini model answered via
+              Firebase AI Logic.
+            </li>
+            <li>
+              <strong>Local fallback</strong> — no model route was available,
+              so Guard's built-in red-flag checks answered instead.
+            </li>
+            <li>
+              <strong>Not sent</strong> — a cloud call was approved but could
+              not run (for example in demo mode). Nothing left this device.
+            </li>
+          </ul>
+          <p id="offline-note" class="hint">
+            Offline, Guard still loads and still checks: on-device and local
+            checks need no connection. Only cloud deep analysis pauses until
+            you are back online.
+          </p>
+        </aside>
+      </div>
 
       <footer>
         <p>
-          Routing is decided by the Firebase AI Logic Hybrid Inference SDK
-          (Gemini Nano on-device, Gemini in the cloud) and the badge on every
-          answer reports the SDK's real <code>inferenceSource</code>.
+          Fluid Guard is a companion for
+          <a href="https://fluidwallet.dpdns.org">Fluid wallet</a> users, built
+          for #BuildHybridAI 2026 with the Firebase AI Logic Hybrid Inference
+          SDK. Guard gives guidance, not financial advice — and no checker
+          replaces reading what you sign. MIT licensed.
         </p>
       </footer>
-    </main>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
