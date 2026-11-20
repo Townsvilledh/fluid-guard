@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fluid Guard — on-device-first transaction &amp; scam explainer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>Fluid Guard</h1>
+        <p class="tagline">
+          Paste a transaction, an approval request, an address or a suspicious
+          message. Guard explains the risk — <strong>on your device first</strong>,
+          privately and offline. The cloud is only used when you ask for a deep
+          analysis.
+        </p>
+      </header>
+
+      <section class="panel">
+        <label for="input">What are you about to sign or send?</label>
+        <textarea
+          id="input"
+          rows="7"
+          placeholder="Paste the transaction summary, approval request or message here…"
+        ></textarea>
+        <div class="fixtures">
+          <span>Try a demo fixture:</span>
+          <button type="button" data-fixture="approval">Malicious approval</button>
+          <button type="button" data-fixture="message">Drainer message</button>
+          <button type="button" data-fixture="plain">Ordinary transfer</button>
+        </div>
+        <button id="check" type="button" class="primary">Check this</button>
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <section id="result" class="panel result" hidden>
+        <div class="result-head">
+          <span id="verdict" class="verdict">—</span>
+          <span id="route-badge" class="badge">—</span>
+        </div>
+        <p id="explanation"></p>
+        <ul id="reasons"></ul>
+        <div id="deep" hidden>
+          <button id="deep-btn" type="button">Deep analysis (cloud)</button>
+          <p class="hint">
+            Deep analysis sends a <em>redacted summary only</em> — never your raw
+            input — to a cloud Gemini model. You will see exactly what is sent
+            before anything leaves this device.
+          </p>
+          <div id="deep-result"></div>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Routing is decided by the Firebase AI Logic Hybrid Inference SDK
+          (Gemini Nano on-device, Gemini in the cloud) and the badge on every
+          answer reports the SDK's real <code>inferenceSource</code>.
+        </p>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,107 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0d;
+  --panel: #16161a;
+  --border: #2a2a31;
+  --text: #f2f2f3;
+  --muted: #a7a7b0;
+  --accent: #f7931a; /* Bitcoin orange, a nod to Fluid */
+  --danger: #ff5c5c;
+  --caution: #ffb84d;
+  --safe: #4ade80;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+h1 { margin-bottom: 0.25rem; }
+.tagline { color: var(--muted); margin-top: 0; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1.25rem;
+}
+
+label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+
+textarea {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.fixtures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.6rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+button {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #16100a;
+  font-weight: 700;
+  padding: 0.55rem 1.2rem;
+}
+
+.status { color: var(--muted); min-height: 1.2em; }
+
+.result-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.verdict { font-size: 1.4rem; font-weight: 800; letter-spacing: 0.04em; }
+.verdict.danger { color: var(--danger); }
+.verdict.caution { color: var(--caution); }
+.verdict.safe { color: var(--safe); }
+
+.badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.badge.on-device { border-color: var(--safe); color: var(--safe); }
+.badge.in-cloud { border-color: var(--accent); color: var(--accent); }
+
+.hint { color: var(--muted); font-size: 0.9rem; }
+footer { color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }
