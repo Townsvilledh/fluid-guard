@@ -8,7 +8,9 @@
 // never intercepted or cached.
 
 const CACHE = "fluid-guard-shell-v1";
-const SHELL = ["/", "/index.html", "/favicon.svg", "/manifest.webmanifest"];
+// Scope-relative: the shell must resolve whether the app is served from a
+// domain root or a project-site subpath (the worker's scope covers both).
+const SHELL = ["./", "./index.html", "./favicon.svg", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -56,7 +58,7 @@ self.addEventListener("fetch", (event) => {
         return response;
       } catch (error) {
         if (request.mode === "navigate") {
-          const shell = await cache.match("/index.html");
+          const shell = await cache.match("./index.html");
           if (shell) return shell;
         }
         throw error;
