@@ -64,6 +64,27 @@ export class DemoModeError extends Error {
 let ai = null;
 let deviceModelReady = false;
 
+// Model calls get a hard ceiling: a stalled cloud route (for example an
+// App Check exchange that can never succeed) must not block a verdict the
+// local route already produced. On timeout the caller's existing fallback
+// engages — local checks for classify/explain, an honest failure notice
+// for deep analysis.
+const MODEL_TIMEOUT_MS = 15000;
+const DEEP_TIMEOUT_MS = 45000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(label + " timed out after " + ms + " ms.");
+      error.name = "TimeoutError";
+      error.code = "timeout";
+      reject(error);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function initAI() {
   if (ai) return ai;
 
@@ -219,7 +240,11 @@ export async function classify(text) {
       "",
       text,
     ].join("\n");
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(
+      model.generateContent(prompt),
+      MODEL_TIMEOUT_MS,
+      "On-device classification",
+    );
     return {
       verdict: JSON.parse(result.response.text()),
       inferenceSource: result.response.inferenceSource, // "ON_DEVICE"
@@ -265,7 +290,11 @@ export async function explain(text, verdict) {
       "",
       text,
     ].join("\n");
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(
+      model.generateContent(prompt),
+      MODEL_TIMEOUT_MS,
+      "Explanation",
+    );
     return {
       text: result.response.text(),
       inferenceSource: result.response.inferenceSource, // "ON_DEVICE" | "IN_CLOUD"
@@ -301,7 +330,11 @@ export async function deepAnalysis(redactedSummary) {
     "",
     redactedSummary,
   ].join("\n");
-  const result = await model.generateContent(prompt);
+  const result = await withTimeout(
+    model.generateContent(prompt),
+    DEEP_TIMEOUT_MS,
+    "Deep analysis",
+  );
   return {
     text: result.response.text(),
     inferenceSource: result.response.inferenceSource, // "IN_CLOUD"
