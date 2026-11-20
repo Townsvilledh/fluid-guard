@@ -38,3 +38,28 @@ export const APP_CHECK_DEBUG_TOKEN = true;
 // Cloud model used for the opt-in deep analysis (overrides the SDK's default
 // hybrid fallback model, gemini-3.5-flash-lite, for that route only).
 export const DEEP_ANALYSIS_MODEL = "gemini-2.5-flash";
+
+// reCAPTCHA site key for App Check in a production build (from the Firebase
+// console: Security -> App Check -> register the reCAPTCHA provider).
+// Leave empty while using the debug-token flow above: when
+// FIREBASE_APPCHECK_DEBUG_TOKEN is set, the SDK exchanges the debug token
+// instead of running attestation, and this key is not exercised.
+// TODO(config): set the real site key for a production deployment.
+export const APP_CHECK_SITE_KEY = "";
+
+/**
+ * True once the placeholder values above have been replaced with a real
+ * Firebase project config. While this is false the app runs in demo mode:
+ * no Firebase call is attempted, the built-in rule engine answers, and the
+ * UI labels every answer as demo mode rather than faking AI output.
+ */
+export function isFirebaseConfigured() {
+  const values = [
+    firebaseConfig.apiKey,
+    firebaseConfig.projectId,
+    firebaseConfig.appId,
+  ];
+  return values.every(
+    (value) => typeof value === "string" && !value.includes("REPLACE_WITH"),
+  );
+}
