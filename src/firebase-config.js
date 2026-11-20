@@ -1,27 +1,24 @@
 // ============================================================================
-// CONFIG PLACEHOLDER — replace these values with your own Firebase project.
+// Firebase project config — the Fluid Guard project (projectId: fluid-guard).
 //
-// Setup (one-time, needs a signed-in Google session):
-//   1. Create a project in the Firebase console
-//      (https://console.firebase.google.com). Google Analytics is NOT needed.
-//   2. Go to AI Services -> AI Logic -> "Get started" and run the guided
-//      workflow. Choose the Gemini Developer API provider (free tier) and
-//      register a Web app when prompted. The workflow automatically enforces
-//      Firebase App Check for AI Logic.
-//   3. Paste the web app config the console gives you below.
+// AI Logic is enabled on this project with the Gemini Developer API provider
+// (free tier), and the App Check API is enabled. The values in a Firebase web
+// config are client identifiers, not secrets — access is controlled by App
+// Check and Firebase security rules.
 //
-// The values in a Firebase web config are client identifiers, not secrets —
-// access is controlled by App Check and Firebase security rules. Even so,
-// keep real project values out of shared forks of this repo.
+// Forks: replace these values with your own project's config (Firebase
+// console -> Project settings -> Your apps -> Web app). While the values
+// contain "REPLACE_WITH", isFirebaseConfigured() below returns false and the
+// app runs in demo mode instead of attempting any Firebase call.
 // ============================================================================
 
 export const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket: "REPLACE_WITH_YOUR_PROJECT.firebasestorage.app",
-  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID",
+  apiKey: "AIzaSyD3wiyfoBE2QLSeZU0nkzRHDRcc93oRrV4",
+  authDomain: "fluid-guard.firebaseapp.com",
+  projectId: "fluid-guard",
+  storageBucket: "fluid-guard.firebasestorage.app",
+  messagingSenderId: "161610398780",
+  appId: "1:161610398780:web:043260846d8040f7f71739",
 };
 
 // App Check debug token for local development and the hosted demo.
