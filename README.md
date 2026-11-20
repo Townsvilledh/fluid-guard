@@ -8,6 +8,8 @@ The first pass runs **on your device** with Gemini Nano through the Firebase AI 
 
 > Built for [#BuildHybridAI 2026](https://firebasehybridaihackathon.devpost.com) (Web / Chrome category).
 
+**Live demo: [Townsvilledh.github.io/fluid-guard](https://Townsvilledh.github.io/fluid-guard/)** — the hosted build runs in live mode against the fluid-guard Firebase project, with its App Check debug token registered, so the cloud routes (explanation fallback and opt-in deep analysis) work end to end.
+
 ## Why hybrid, and why here
 
 Every other "AI scam checker" sends the sensitive data to a server to be checked. Guard inverts that:
@@ -25,9 +27,10 @@ This repo is configured for the live **fluid-guard** Firebase project (AI Logic 
 
 **Demo mode:** if the config in `src/firebase-config.js` is replaced with placeholders (for example in a fork), the app runs in an explicitly labelled demo mode — no Firebase call is attempted, the rule engine answers, and a banner says so.
 
-Still outstanding (needs the Firebase console):
+App Check: the hosted demo build carries a fixed App Check debug token that is registered in the Firebase console (App Check → Fluid Guard Web → "Fluid Guard demo"), and its cloud calls are verified working. The token lives only in the deployed bundle, never in this repo's source — `src/firebase-config.js` keeps `APP_CHECK_DEBUG_TOKEN` in generate-and-register mode (`true`) for local development (see Setup step 2).
 
-- Register the App Check debug token used by the hosted build (see Setup step 2) — until then, cloud calls from unregistered browsers fail App Check and Guard degrades locally, as designed.
+Still outstanding:
+
 - TODO(config): for a production deployment beyond the demo, register a reCAPTCHA provider and set `APP_CHECK_SITE_KEY` in `src/firebase-config.js`.
 
 ## Setup
@@ -82,10 +85,10 @@ npm run build     # production build into dist/
 npm run preview   # serve the production build locally
 ```
 
-Deploy the contents of `dist/` to any static host. Two follow-ups for a hosted deployment:
+Deploy the contents of `dist/` to any static host — the build uses relative paths, so it works at a domain root or under a subpath. The live demo is served from this repo's `gh-pages` branch via GitHub Pages. Two notes for a hosted deployment:
 
 - The service worker caches the app shell, so Guard **loads fully offline** after the first visit; on-device and local checks keep working with no connection, and only cloud deep analysis pauses.
-- Register the App Check debug token printed by the hosted build (Setup step 2) so its cloud calls pass App Check.
+- The hosted build's fixed App Check debug token must be registered in the Firebase console (Setup step 2) so its cloud calls pass App Check; the demo's token is already registered.
 
 ## Project structure
 
