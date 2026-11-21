@@ -185,21 +185,28 @@ async function rpcOnce(ctx, endpoint, method, params) {
 }
 
 // Call a method on the first endpoint that answers, rotating across the
-// chain's endpoints and cooling down any that throttle or fail.
+// chain's endpoints and cooling down any that throttle or fail. If every
+// endpoint fails — typically a brief throttle window right after a burst
+// of log queries — wait and make one more pass before giving up: these
+// reads (allowances above all) decide the verdicts, so they get the
+// extra patience.
 async function rpcCall(ctx, method, params) {
   const count = ctx.chain.endpoints.length;
   let lastError = null;
-  for (let i = 0; i < count; i++) {
-    const idx = (ctx.rotate + i) % count;
-    if (ctx.state[idx].cooldownUntil > Date.now()) continue;
-    try {
-      const result = await rpcOnce(ctx, ctx.chain.endpoints[idx], method, params);
-      ctx.rotate = idx;
-      return result;
-    } catch (error) {
-      lastError = error;
-      ctx.state[idx].cooldownUntil =
-        Date.now() + (error.kind === "rate" ? 6000 : 1500);
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) await sleep(2000);
+    for (let i = 0; i < count; i++) {
+      const idx = (ctx.rotate + i) % count;
+      if (pass === 0 && ctx.state[idx].cooldownUntil > Date.now()) continue;
+      try {
+        const result = await rpcOnce(ctx, ctx.chain.endpoints[idx], method, params);
+        ctx.rotate = idx;
+        return result;
+      } catch (error) {
+        lastError = error;
+        ctx.state[idx].cooldownUntil =
+          Date.now() + (error.kind === "rate" ? 6000 : 1500);
+      }
     }
   }
   throw lastError || new Error("No RPC endpoint available");
