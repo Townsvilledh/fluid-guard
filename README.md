@@ -4,6 +4,8 @@
 
 Fluid Guard is a companion web app for self-custody wallet users (built for the [Fluid wallet](https://fluidwallet.dpdns.org) community). Paste a transaction summary, a token approval request, an address, or a suspicious message, and Guard explains — in plain language — what it is, how risky it looks, and what could go wrong if you sign it.
 
+Guard can also **scan your wallet's existing token approvals**: paste a wallet address, pick a chain, and Guard reads that wallet's approval history from the public chain, checks which approvals are still active, and flags the dangerous ones — unlimited allowances to contracts it cannot recognise. Address only: no wallet connection, no signing, no seed phrase, ever.
+
 The first pass runs **on your device** with Gemini Nano through the Firebase AI Logic Hybrid Inference SDK. Nothing sensitive leaves the device, it works offline, and it costs nothing to run. Only if you tap **Deep analysis** does a redacted summary — shown to you first — go to a cloud Gemini model for a deeper verdict. Every answer carries a badge, driven by the SDK's real `inferenceSource`, saying whether it was **answered on your device** or **answered in the cloud**.
 
 > Built for [#BuildHybridAI 2026](https://firebasehybridaihackathon.devpost.com) (Web / Chrome category).
@@ -21,7 +23,7 @@ Every other "AI scam checker" sends the sensitive data to a server to be checked
 
 ## Status
 
-Complete, demo-ready build. The full product is in place: input flow with one-tap demo fixtures, verdict card, plain-language explanations, the opt-in deep-analysis consent flow, a persistent session routing panel, offline app-shell caching, and honest degradation at every step.
+Complete, demo-ready build. The full product is in place: input flow with one-tap demo fixtures, verdict card, plain-language explanations, the opt-in deep-analysis consent flow, a persistent session routing panel, offline app-shell caching, honest degradation at every step — and the wallet approval scan described below.
 
 This repo is configured for the live **fluid-guard** Firebase project (AI Logic enabled, Gemini Developer API provider, App Check API on), so the app attempts real Firebase AI Logic inference. Where a model route is unavailable at runtime — a browser without Gemini Nano, a stalled cloud call — Guard degrades to its built-in rule-based red-flag checks and labels the answer as such rather than faking AI output. Model calls carry a hard timeout (15 seconds; 45 for deep analysis) so a stalled route can never block a locally produced verdict.
 
@@ -75,8 +77,30 @@ Open the printed localhost URL in Chrome, paste one of the built-in demo fixture
 | Plain-language explanation of the verdict | On-device first | `PREFER_ON_DEVICE` |
 | Deep analysis (opt-in, redacted summary only) | Cloud Gemini | `ONLY_IN_CLOUD` |
 | Follow-up questions | Cloud Gemini (labelled) | `ONLY_IN_CLOUD` |
+| Wallet approval scan | On this device — public chain reads + built-in checks | No AI model — public RPC reads, classified locally |
 
 Key SDK surface used (Firebase JS SDK v12.5.0+): `getAI` with `GoogleAIBackend`, `getGenerativeModel` with `InferenceMode`, `model.initializeDeviceModel()` after a user interaction, `generateContent()` with an on-device `responseConstraint` schema for structured output, and `response.inferenceSource` (`"ON_DEVICE"` / `"IN_CLOUD"`) to render the routing badge. The default cloud fallback model is `gemini-3.5-flash-lite`; deep analysis overrides it via `inCloudParams`.
+
+## Wallet approval scan
+
+**Method.** For the chosen chain, Guard queries public JSON-RPC nodes for the wallet's ERC-20 `Approval` events (`eth_getLogs`, owner = the address) over a bounded lookback, then reads the **current** allowance of every (token, spender) pair with `eth_call` and keeps only allowances still above zero — an approval that was revoked or used up is history, not risk. Each active approval is classified locally with the same reason-code language as the checker:
+
+- **DANGER** — unlimited allowance (≥ 2²⁵⁵, effectively unbounded) to a spender Guard cannot recognise.
+- **CAUTION** — unlimited allowance to a recognised protocol, any allowance to an unrecognised spender, a very large finite allowance (≥ 1,000,000 tokens), or an allowance that could not be read back on-chain.
+- **SAFE** — a finite, ordinary allowance to a recognised protocol (Uniswap routers and Permit2, 1inch, PancakeSwap, Aerodrome — a deliberately small list sourced from the protocols' own deployment docs; an unlisted spender is "unknown", never automatically "malicious").
+
+Public RPC endpoints cap log ranges and throttle freely, so the scanner rotates endpoints, splits refused ranges, backs off when throttled — and records any range it could not scan as an explicit **gap**, shown in the result. A partial scan is reported as partial, never as complete. After the scan, the same opt-in deep analysis is offered: the consent sheet shows the exact scan summary (public chain data) before anything is sent to the cloud, and the routing panel logs the scan itself as a local call.
+
+**Coverage limits (v1).** The lookback is bounded by block time and by what free public nodes will serve:
+
+| Chain | Lookback | Why |
+|---|---|---|
+| Ethereum | ~12 months (2,628,000 blocks) | Archive-capable public endpoints exist |
+| Base | ~12 months attempted (15,768,000 blocks) | Endpoint goodwill varies; gaps are reported |
+| Arbitrum One | ~30 days (10,368,000 blocks) | ~0.25s blocks make a year ~126M blocks — public log queries will not serve that |
+| BNB Smart Chain | ~90 days (2,592,000 blocks) | Dataseed endpoints cap `eth_getLogs` at ~5,000-block spans |
+
+Not covered: approvals granted before the lookback, approvals on other chains (scan each chain separately), and NFT collection approvals (`setApprovalForAll`). A clean scan is a bounded statement — "no active approvals found in this range" — not a guarantee.
 
 ## Build and deploy
 
@@ -95,6 +119,8 @@ Deploy the contents of `dist/` to any static host — the build uses relative pa
 - `src/guard.js` — the Firebase AI Logic routing layer: the three model factories (`ONLY_ON_DEVICE` classification, `PREFER_ON_DEVICE` explanation, `ONLY_IN_CLOUD` deep analysis), timeouts, and the honest local fallback.
 - `src/rules.js` — the built-in rule-based red-flag engine (demo mode and degraded mode) plus the redaction helpers behind the deep-analysis consent sheet.
 - `src/fixtures.js` — the three one-tap demo fixtures.
+- `src/scan.js` — the wallet approval scanner: public-RPC log scan with endpoint rotation, range splitting and explicit coverage gaps; current-allowance reads; local classification.
+- `src/known.js` — the known-spender and known-token lists for the scan, sourced from the protocols' own deployment documentation.
 - `src/main.js` / `src/style.css` / `index.html` — the interface, including the session routing panel.
 - `public/sw.js` — the service worker that caches the app shell for offline use.
 
