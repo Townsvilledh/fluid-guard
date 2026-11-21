@@ -433,15 +433,16 @@ function renderScanResult(result) {
   $("scan-coverage").textContent =
     `Scanned ${chain.name}, blocks ${coverage.fromBlock.toLocaleString("en-GB")} to ` +
     `${coverage.toBlock.toLocaleString("en-GB")}` +
-    (fromDate && toDate ? ` (${fromDate} – ${toDate}; ${chain.lookbackLabel})` : ` (${chain.lookbackLabel})`) +
+    (fromDate && toDate ? ` (${fromDate} – ${toDate}; ${coverage.lookbackLabel || chain.lookbackLabel})` : ` (${coverage.lookbackLabel || chain.lookbackLabel})`) +
     `. Found ${coverage.eventsFound} approval event${coverage.eventsFound === 1 ? "" : "s"} and checked ` +
     `${coverage.pairsChecked} token/spender pair${coverage.pairsChecked === 1 ? "" : "s"}: ` +
     `${coverage.activeCount} still active, ${coverage.inactiveCount} now zero (revoked or used up). ` +
     `Not covered: approvals granted before block ${coverage.fromBlock.toLocaleString("en-GB")}, ` +
     "approvals on other chains, and NFT collection approvals (setApprovalForAll). " +
-    "Check each chain separately.";
+    "Check each chain separately." +
+    (coverage.note ? " " + coverage.note : "");
 
-  if (coverage.complete) {
+  if (coverage.complete || !coverage.gaps.length) {
     $("scan-gaps").hidden = true;
   } else {
     $("scan-gaps").hidden = false;
