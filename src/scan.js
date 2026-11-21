@@ -568,10 +568,17 @@ export async function scanWallet(chain, ownerAddress, options = {}) {
 
   const pairs = collectPairs(logs);
 
+  // Allowance reads are the scan's most safety-critical calls: a single
+  // transient failure must not understate a live approval, so each read
+  // is retried before the pair is marked unverified.
   const checked = await mapLimit(pairs, 4, async (pair) => {
     const data =
       ALLOWANCE_SELECTOR + padAddress(owner) + padAddress(pair.spender);
-    const allowance = await callUint(ctx, pair.token, data);
+    let allowance = null;
+    for (let attempt = 0; attempt < 3 && allowance === null; attempt++) {
+      if (attempt > 0) await sleep(800);
+      allowance = await callUint(ctx, pair.token, data);
+    }
     return { ...pair, allowance };
   });
   if (onProgress) {
