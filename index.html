@@ -11,8 +11,8 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <title>Fluid Guard — on-device-first transaction &amp; scam explainer</title>
-    <script type="module" crossorigin src="./assets/index-HtuGsVVt.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BwAJwFBI.css">
+    <script type="module" crossorigin src="./assets/index-CefHcYij.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BQreohvC.css">
   </head>
   <body>
     <div class="app">
@@ -124,6 +124,103 @@
             </div>
           </section>
 
+          <section class="panel" aria-labelledby="scan-heading">
+            <h2 id="scan-heading" class="panel-title">Scan my wallet</h2>
+            <p>
+              Paste your own wallet address and Guard checks the token
+              approvals that wallet has given out — the standing permissions
+              that let apps move your tokens. An unlimited approval to a
+              contract you do not recognise is how wallets get drained weeks
+              after the day they used a dodgy site.
+            </p>
+            <p class="callout">
+              <strong>Address only — no wallet connection, no signing, no
+              seed phrase, ever.</strong> Any “scanner” that asks you to
+              connect a wallet or sign a message just to check your
+              approvals is using the drainer's own pattern. This scan reads
+              public on-chain data — the same data a block explorer shows
+              anyone.
+            </p>
+            <div class="scan-controls">
+              <label class="scan-label" for="scan-address">Wallet address</label>
+              <input
+                id="scan-address"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="0x…"
+              />
+              <label class="scan-label" for="scan-chain">Chain</label>
+              <select id="scan-chain">
+                <option value="ethereum">Ethereum</option>
+                <option value="base">Base</option>
+                <option value="arbitrum">Arbitrum One</option>
+                <option value="bsc">BNB Smart Chain</option>
+              </select>
+              <div>
+                <button id="scan-run" type="button" class="primary">
+                  Scan this wallet
+                </button>
+              </div>
+            </div>
+            <p id="scan-status" class="status" role="status" aria-live="polite"></p>
+            <progress id="scan-progress" max="100" value="0" hidden></progress>
+            <p class="hint">
+              The scan reads the chain directly from this device through
+              public nodes and checks each approval with Guard's built-in
+              rules — no AI model is involved. Depending on the chain it can
+              take a little while; progress and any gaps are shown honestly
+              as it goes.
+            </p>
+          </section>
+
+          <section id="scan-result" class="panel result" hidden aria-labelledby="scan-result-heading">
+            <h2 id="scan-result-heading" class="visually-hidden">Wallet scan result</h2>
+            <div class="result-head">
+              <span id="scan-verdict" class="verdict">—</span>
+              <span class="badge fallback">Checked on this device — public chain data</span>
+            </div>
+            <p id="scan-headline" class="explanation"></p>
+            <p id="scan-coverage" class="route-note"></p>
+            <p id="scan-gaps" class="scan-gaps" hidden></p>
+            <div id="scan-rows" class="scan-rows"></div>
+
+            <div id="scan-deep" class="deep" hidden>
+              <h3 class="sub-title">Deep analysis (cloud, opt-in)</h3>
+              <p class="hint">
+                A cloud Gemini model can explain the risky approvals in
+                depth: what each spender could do, the worst case for this
+                wallet, and the exact steps to revoke or reduce them. It
+                only ever receives the summary below — public on-chain data,
+                shown to you in full first — and only when you approve it.
+              </p>
+              <button id="scan-deep-prepare" type="button">
+                Show me exactly what would be sent
+              </button>
+              <div id="scan-consent" class="consent" hidden>
+                <p class="consent-title">
+                  This is the exact text that would be sent to the cloud.
+                  Nothing else leaves this device.
+                </p>
+                <pre id="scan-summary" class="redacted"></pre>
+                <div class="consent-actions">
+                  <button id="scan-deep-approve" type="button" class="primary">
+                    Approve &amp; run deep analysis
+                  </button>
+                  <button id="scan-deep-cancel" type="button">Cancel</button>
+                </div>
+                <p id="scan-deep-status" class="status" role="status" aria-live="polite"></p>
+              </div>
+              <div id="scan-deep-wrap" class="deep-result" hidden>
+                <div class="result-head">
+                  <span class="deep-title">Deep analysis</span>
+                  <span id="scan-deep-badge" class="badge in-cloud">Answered in the cloud</span>
+                </div>
+                <p id="scan-deep-result"></p>
+              </div>
+            </div>
+          </section>
+
           <section class="panel about" aria-labelledby="about-heading">
             <h2 id="about-heading" class="panel-title">Why hybrid?</h2>
             <p>
@@ -166,6 +263,11 @@
                   <td>Cloud — Gemini, labelled as cloud</td>
                   <td><code>ONLY_IN_CLOUD</code></td>
                 </tr>
+                <tr>
+                  <td>Wallet approval scan</td>
+                  <td>On this device — public chain reads + built-in checks</td>
+                  <td>No AI model — public RPC reads, classified locally</td>
+                </tr>
               </tbody>
             </table>
             <p class="hint">
@@ -202,6 +304,11 @@
             <li>
               <strong>Not sent</strong> — a cloud call was approved but could
               not run (for example in demo mode). Nothing left this device.
+            </li>
+            <li>
+              <strong>Wallet scans</strong> are logged as local fallback by
+              design: the scan is public blockchain reads plus Guard's
+              built-in checks, not a model call that failed.
             </li>
           </ul>
           <p id="offline-note" class="hint">
