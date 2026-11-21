@@ -22,6 +22,14 @@ import {
 } from "./guard.js";
 import { FIXTURES } from "./fixtures.js";
 import { buildRedactedSummary } from "./rules.js";
+import {
+  CHAINS,
+  isValidAddress,
+  scanWallet,
+  buildScanSummary,
+  formatAllowance,
+  shortAddress,
+} from "./scan.js";
 
 const CODE_LABELS = {
   unlimited_approval: "Unlimited token approval",
@@ -357,6 +365,270 @@ $("deep-approve").addEventListener("click", async () => {
     }
   } finally {
     $("deep-approve").disabled = false;
+  }
+});
+
+// ------------------------------------------------------------ wallet scan
+//
+// "Scan my wallet" — address only, public chain reads, local rule engine.
+// The scan itself is logged as LOCAL_FALLBACK in the routing panel: it is
+// local by design (public RPC reads + built-in checks), not a model call
+// that failed. Its optional deep analysis reuses the same consent flow as
+// the checker: the exact summary is shown first and sent only on approval.
+
+const scanState = { result: null, summary: "" };
+
+function esc(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function fmtScanDate(ms) {
+  return ms
+    ? new Date(ms).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+}
+
+function resetScanDeep() {
+  scanState.summary = "";
+  $("scan-consent").hidden = true;
+  $("scan-deep-wrap").hidden = true;
+  $("scan-deep-status").textContent = "";
+  $("scan-deep-prepare").hidden = false;
+}
+
+function renderScanResult(result) {
+  const { chain, overall, approvals, coverage } = result;
+  const dangerCount = approvals.filter((a) => a.level === "danger").length;
+  const cautionCount = approvals.filter((a) => a.level === "caution").length;
+
+  $("scan-verdict").textContent = overall.toUpperCase();
+  $("scan-verdict").className = "verdict " + overall;
+
+  if (overall === "danger") {
+    $("scan-headline").textContent =
+      `This wallet is in danger: ${dangerCount} approval${dangerCount === 1 ? "" : "s"} ` +
+      "give an unrecognised spender unlimited access to a token. Whoever controls that spender can take the full balance at any time.";
+  } else if (overall === "caution") {
+    $("scan-headline").textContent =
+      `No dangerous approvals found, but ${cautionCount} approval${cautionCount === 1 ? "" : "s"} ` +
+      "below deserve a second look before you trust this wallet with more funds.";
+  } else if (approvals.length) {
+    $("scan-headline").textContent =
+      "No dangerous or unusual approvals found — every active approval in the scanned range is a finite amount to a protocol Guard recognises.";
+  } else {
+    $("scan-headline").textContent =
+      "No active approvals were found in the scanned range. Read the coverage note — that is not the same as a guarantee.";
+  }
+
+  const fromDate = fmtScanDate(coverage.fromTime);
+  const toDate = fmtScanDate(coverage.toTime);
+  $("scan-coverage").textContent =
+    `Scanned ${chain.name}, blocks ${coverage.fromBlock.toLocaleString("en-GB")} to ` +
+    `${coverage.toBlock.toLocaleString("en-GB")}` +
+    (fromDate && toDate ? ` (${fromDate} – ${toDate}; ${chain.lookbackLabel})` : ` (${chain.lookbackLabel})`) +
+    `. Found ${coverage.eventsFound} approval event${coverage.eventsFound === 1 ? "" : "s"} and checked ` +
+    `${coverage.pairsChecked} token/spender pair${coverage.pairsChecked === 1 ? "" : "s"}: ` +
+    `${coverage.activeCount} still active, ${coverage.inactiveCount} now zero (revoked or used up). ` +
+    `Not covered: approvals granted before block ${coverage.fromBlock.toLocaleString("en-GB")}, ` +
+    "approvals on other chains, and NFT collection approvals (setApprovalForAll). " +
+    "Check each chain separately.";
+
+  if (coverage.complete) {
+    $("scan-gaps").hidden = true;
+  } else {
+    $("scan-gaps").hidden = false;
+    $("scan-gaps").textContent =
+      "Warning — this scan is incomplete: block ranges " +
+      coverage.gaps.map(([a, b]) => `${a.toLocaleString("en-GB")}–${b.toLocaleString("en-GB")}`).join(", ") +
+      " could not be read from any public node after retries. Approvals granted in those ranges may be missing from this result.";
+  }
+
+  $("scan-rows").innerHTML = approvals
+    .map((approval) => {
+      const symbol = approval.tokenMeta.symbol;
+      const tokenTitle = symbol
+        ? esc(symbol) +
+          (approval.tokenMeta.name ? ` · ${esc(approval.tokenMeta.name)}` : "")
+        : "Unknown token";
+      const spenderLabel = approval.spenderName
+        ? esc(approval.spenderName)
+        : "Unknown spender — not a protocol Guard recognises";
+      const amount = approval.verified
+        ? esc(formatAllowance(approval.allowance, approval.tokenMeta.decimals)) +
+          (symbol ? " " + esc(symbol) : "")
+        : "Could not be read on-chain";
+      const reasons = approval.reasons
+        .map((reason) => `<li>${esc(reason)}</li>`)
+        .join("");
+      return (
+        `<article class="approval level-${approval.level}">` +
+        `<div class="approval-head">` +
+        `<span class="verdict-chip ${approval.level}">${approval.level.toUpperCase()}</span>` +
+        `<strong class="approval-token">${tokenTitle}</strong>` +
+        (approval.tokenKnown ? `<span class="badge">Major asset</span>` : "") +
+        `</div>` +
+        `<p class="approval-line">Token: <a class="mono" href="${chain.explorer}/address/${approval.token}" target="_blank" rel="noopener">${approval.token}</a></p>` +
+        `<p class="approval-line">Spender: <strong>${spenderLabel}</strong> <a class="mono" href="${chain.explorer}/address/${approval.spender}" target="_blank" rel="noopener">${shortAddress(approval.spender)}</a></p>` +
+        `<p class="approval-line">They can move: <strong>${amount}</strong></p>` +
+        (reasons ? `<ul class="approval-reasons">${reasons}</ul>` : "") +
+        `</article>`
+      );
+    })
+    .join("");
+
+  $("scan-deep").hidden = approvals.length === 0;
+  $("scan-result").hidden = false;
+}
+
+async function runScan() {
+  const address = $("scan-address").value.trim();
+  const chain = CHAINS[$("scan-chain").value];
+  if (!isValidAddress(address)) {
+    $("scan-status").textContent =
+      "That does not look like a wallet address — it should start with 0x and be 42 characters long. Nothing was scanned.";
+    return;
+  }
+  $("scan-run").disabled = true;
+  $("scan-result").hidden = true;
+  resetScanDeep();
+  scanState.result = null;
+  const progress = $("scan-progress");
+  progress.hidden = false;
+  progress.value = 0;
+  $("scan-status").textContent =
+    `Scanning ${chain.name}… reading approval history for ${shortAddress(address)}.`;
+  const started = performance.now();
+  try {
+    const result = await scanWallet(chain, address, {
+      onProgress: (p) => {
+        if (p.phase === "logs") {
+          const pct = p.total ? Math.floor((p.scanned / p.total) * 100) : 0;
+          progress.value = pct;
+          $("scan-status").textContent =
+            `Scanning ${chain.name}… ${pct}% of blocks read` +
+            (p.gaps ? ` · ${p.gaps} range(s) refused so far` : "") +
+            ".";
+        } else if (p.phase === "allowances") {
+          progress.value = 100;
+          $("scan-status").textContent =
+            "History read — checking which approvals are still active…";
+        }
+      },
+    });
+    scanState.result = result;
+    logRoute({
+      task: "Wallet approval scan",
+      requestedMode: "LOCAL (public chain reads)",
+      source: "LOCAL_FALLBACK",
+      ms: performance.now() - started,
+      note:
+        `${chain.name}: ${result.coverage.activeCount} active approval(s) from ` +
+        `${result.coverage.pairsChecked} pair(s) checked. ` +
+        (result.coverage.complete
+          ? "Full range scanned."
+          : "PARTIAL — some ranges could not be read; the gaps are listed in the result."),
+    });
+    renderScanResult(result);
+    $("scan-status").textContent = "";
+    $("scan-result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (error) {
+    console.error("Wallet scan failed:", error);
+    logRoute({
+      task: "Wallet approval scan",
+      requestedMode: "LOCAL (public chain reads)",
+      source: "NOT_SENT",
+      note: "The public chain nodes could not be reached — the scan did not run.",
+    });
+    $("scan-status").textContent =
+      "The scan could not read the chain — the public nodes are unreachable or throttling right now. Nothing was sent anywhere; try again in a moment.";
+  } finally {
+    $("scan-run").disabled = false;
+    progress.hidden = true;
+  }
+}
+
+$("scan-run").addEventListener("click", runScan);
+$("scan-address").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") runScan();
+});
+
+$("scan-deep-prepare").addEventListener("click", () => {
+  if (!scanState.result) return;
+  scanState.summary = buildScanSummary(scanState.result);
+  $("scan-summary").textContent = scanState.summary;
+  $("scan-consent").hidden = false;
+  $("scan-deep-status").textContent = DEMO_MODE
+    ? "Demo mode: you can review and approve the summary, but with no Firebase project configured there is no cloud to send it to — approving will show exactly where the flow stops, and nothing will be sent."
+    : "";
+});
+
+$("scan-deep-cancel").addEventListener("click", () => {
+  $("scan-consent").hidden = true;
+  $("scan-deep-status").textContent = "Cancelled — nothing was sent.";
+});
+
+$("scan-deep-approve").addEventListener("click", async () => {
+  const summary = scanState.summary;
+  if (!summary) return;
+  $("scan-deep-approve").disabled = true;
+  $("scan-deep-status").textContent = "Running deep analysis in the cloud…";
+  const started = performance.now();
+  try {
+    if (!navigator.onLine) {
+      logRoute({
+        task: "Deep analysis (wallet scan)",
+        requestedMode: "ONLY_IN_CLOUD",
+        source: "NOT_SENT",
+        note: "You are offline — deep analysis needs a connection. Nothing was sent.",
+      });
+      $("scan-deep-status").textContent =
+        "You are offline, so deep analysis cannot run. Nothing was sent — try again when you are back online.";
+      return;
+    }
+    const result = await deepAnalysis(summary);
+    logRoute({
+      task: "Deep analysis (wallet scan)",
+      requestedMode: result.requestedMode,
+      source: result.inferenceSource,
+      ms: performance.now() - started,
+    });
+    $("scan-deep-badge").textContent = "Answered in the cloud";
+    $("scan-deep-badge").className = "badge in-cloud";
+    $("scan-deep-result").textContent = result.text;
+    $("scan-deep-wrap").hidden = false;
+    $("scan-consent").hidden = true;
+    $("scan-deep-status").textContent = "";
+  } catch (error) {
+    if (error instanceof DemoModeError || (error && error.code === "demo-mode")) {
+      logRoute({
+        task: "Deep analysis (wallet scan)",
+        requestedMode: "ONLY_IN_CLOUD",
+        source: "NOT_SENT",
+        note: "Demo mode — Firebase is not configured, so the approved scan summary was not sent.",
+      });
+      $("scan-deep-status").textContent =
+        "Demo mode: the summary above is exactly what would be sent, but no Firebase project is configured, so nothing was sent anywhere. Configure Firebase (see the README) to run the real cloud analysis.";
+    } else {
+      console.error("Scan deep analysis failed:", error);
+      logRoute({
+        task: "Deep analysis (wallet scan)",
+        requestedMode: "ONLY_IN_CLOUD",
+        source: "NOT_SENT",
+        note: "The cloud call failed — nothing was analysed.",
+      });
+      $("scan-deep-status").textContent =
+        "Deep analysis could not run just now. Nothing was analysed in the cloud — you can try again.";
+    }
+  } finally {
+    $("scan-deep-approve").disabled = false;
   }
 });
 
