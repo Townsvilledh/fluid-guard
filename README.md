@@ -77,30 +77,36 @@ Open the printed localhost URL in Chrome, paste one of the built-in demo fixture
 | Plain-language explanation of the verdict | On-device first | `PREFER_ON_DEVICE` |
 | Deep analysis (opt-in, redacted summary only) | Cloud Gemini | `ONLY_IN_CLOUD` |
 | Follow-up questions | Cloud Gemini (labelled) | `ONLY_IN_CLOUD` |
-| Wallet approval scan | On this device — public chain reads + built-in checks | No AI model — public RPC reads, classified locally |
+| Wallet approval scan | On this device — public chain reads + built-in checks | No AI model — public node and block-explorer index reads, classified locally |
 
 Key SDK surface used (Firebase JS SDK v12.5.0+): `getAI` with `GoogleAIBackend`, `getGenerativeModel` with `InferenceMode`, `model.initializeDeviceModel()` after a user interaction, `generateContent()` with an on-device `responseConstraint` schema for structured output, and `response.inferenceSource` (`"ON_DEVICE"` / `"IN_CLOUD"`) to render the routing badge. The default cloud fallback model is `gemini-3.5-flash-lite`; deep analysis overrides it via `inCloudParams`.
 
 ## Wallet approval scan
 
-**Method.** For the chosen chain, Guard queries public JSON-RPC nodes for the wallet's ERC-20 `Approval` events (`eth_getLogs`, owner = the address) over a bounded lookback, then reads the **current** allowance of every (token, spender) pair with `eth_call` and keeps only allowances still above zero — an approval that was revoked or used up is history, not risk. Each active approval is classified locally with the same reason-code language as the checker:
+**Method.** Guard reads the wallet's ERC-20 `Approval` history from public sources, then reads the **current** allowance of every (token, spender) pair with `eth_call` and keeps only allowances still above zero — an approval that was revoked or used up is history, not risk. The history comes from the first of three sources that can serve it:
+
+1. **Block-explorer index** (Ethereum, Base). The chain's Blockscout explorer indexes every log, so its API returns the wallet's approval history over the full lookback in a few calls. The index caps each answer at 1,000 rows; a full page splits the range and asks again, so a capped answer is never silently accepted as complete.
+2. **Public-node log crawl** (any chain). `eth_getLogs` in chunks sized to what each node was measured to serve (Arbitrum's official node: 30,000-block spans; BSC dataseed mirrors: 5,000). Nodes throttle freely, so the crawl rotates endpoints, splits refused ranges, backs off when throttled — and records any range it could not scan as an explicit **gap**, shown in the result.
+3. **Held-token fallback** (Base, BSC). Where wide log scans cannot be served keylessly — on Base, free public nodes refuse them outright (measured 2026-11-21 across 16+ endpoints: span caps of 50–2,000 blocks, address-filter requirements, or log queries refused entirely); on BSC, the dataseed mirrors refuse log queries from rate-limited addresses — the scan checks which tokens from a bundled known-token list the wallet currently holds (CoinGecko's Base / BSC token lists, snapshotted 2026-11-21; balances batched through Multicall3) and reads those tokens' approval history with address-filtered queries, which public nodes do serve (50,000-block spans, archive included). The fallback is partial by construction — tokens the wallet no longer holds are invisible to it — and the result carries a coverage note saying exactly that.
+
+Each active approval is classified locally with the same reason-code language as the checker:
 
 - **DANGER** — unlimited allowance (≥ 2²⁵⁵, effectively unbounded) to a spender Guard cannot recognise.
 - **CAUTION** — unlimited allowance to a recognised protocol, any allowance to an unrecognised spender, a very large finite allowance (≥ 1,000,000 tokens), or an allowance that could not be read back on-chain.
 - **SAFE** — a finite, ordinary allowance to a recognised protocol (Uniswap routers and Permit2, 1inch, PancakeSwap, Aerodrome — a deliberately small list sourced from the protocols' own deployment docs; an unlisted spender is "unknown", never automatically "malicious").
 
-Public RPC endpoints cap log ranges and throttle freely, so the scanner rotates endpoints, splits refused ranges, backs off when throttled — and records any range it could not scan as an explicit **gap**, shown in the result. A partial scan is reported as partial, never as complete. After the scan, the same opt-in deep analysis is offered: the consent sheet shows the exact scan summary (public chain data) before anything is sent to the cloud, and the routing panel logs the scan itself as a local call.
+A partial scan is reported as partial, never as complete. After the scan, the same opt-in deep analysis is offered: the consent sheet shows the exact scan summary (public chain data) before anything is sent to the cloud, and the routing panel logs the scan itself as a local call.
 
-**Coverage limits (v1).** The lookback is bounded by block time and by what free public nodes will serve:
+**Coverage (measured 2026-11-21).** The lookback is bounded by block time and by what free public sources will actually serve:
 
-| Chain | Lookback | Why |
+| Chain | Lookback | How it is served |
 |---|---|---|
-| Ethereum | ~12 months (2,628,000 blocks) | Archive-capable public endpoints exist |
-| Base | ~12 months attempted (15,768,000 blocks) | Endpoint goodwill varies; gaps are reported |
-| Arbitrum One | ~30 days (10,368,000 blocks) | ~0.25s blocks make a year ~126M blocks — public log queries will not serve that |
-| BNB Smart Chain | ~90 days (2,592,000 blocks) | Dataseed endpoints cap `eth_getLogs` at ~5,000-block spans |
+| Ethereum | ~12 months (2,628,000 blocks) | Blockscout index — the full range in a few calls (the index's node proxy also served the whole range in a single `eth_getLogs` call when measured) |
+| Base | ~12 months via the index; fallback ~90 days, held tokens only | Public RPC nodes refuse Base-wide log scans; the Blockscout index is the complete source. Where the index is unreachable, the held-token fallback runs and the result is labelled partial |
+| Arbitrum One | ~30 days (10,368,000 blocks) | Official node at its measured 30,000-block span cap — about 350 calls; the reference wallet's scan completed in ~40 seconds |
+| BNB Smart Chain | ~90 days (2,592,000 blocks) | Dataseed crawl (5,000-block spans) where served; held-token fallback (50,000-block spans) otherwise. Under free-tier rate limits the fallback can be slow and can end with gaps — they are listed in the result |
 
-Not covered: approvals granted before the lookback, approvals on other chains (scan each chain separately), and NFT collection approvals (`setApprovalForAll`). A clean scan is a bounded statement — "no active approvals found in this range" — not a guarantee.
+Not covered: approvals granted before the lookback, approvals on other chains (scan each chain separately), and NFT collection approvals (`setApprovalForAll`) — and, in a fallback scan, approvals on tokens the wallet no longer holds. A clean scan is a bounded statement — "no active approvals found in this range" — not a guarantee.
 
 ## Build and deploy
 
@@ -119,7 +125,8 @@ Deploy the contents of `dist/` to any static host — the build uses relative pa
 - `src/guard.js` — the Firebase AI Logic routing layer: the three model factories (`ONLY_ON_DEVICE` classification, `PREFER_ON_DEVICE` explanation, `ONLY_IN_CLOUD` deep analysis), timeouts, and the honest local fallback.
 - `src/rules.js` — the built-in rule-based red-flag engine (demo mode and degraded mode) plus the redaction helpers behind the deep-analysis consent sheet.
 - `src/fixtures.js` — the three one-tap demo fixtures.
-- `src/scan.js` — the wallet approval scanner: public-RPC log scan with endpoint rotation, range splitting and explicit coverage gaps; current-allowance reads; local classification.
+- `src/scan.js` — the wallet approval scanner: three-tier history sourcing (Blockscout index, public-node log crawl with measured span caps and explicit coverage gaps, held-token fallback), current-allowance reads, local classification.
+- `src/base-tokens.js` / `src/bsc-tokens.js` — bundled known-token lists (CoinGecko snapshots, 2026-11-21) used by the scan's held-token fallback.
 - `src/known.js` — the known-spender and known-token lists for the scan, sourced from the protocols' own deployment documentation.
 - `src/main.js` / `src/style.css` / `index.html` — the interface, including the session routing panel.
 - `public/sw.js` — the service worker that caches the app shell for offline use.
