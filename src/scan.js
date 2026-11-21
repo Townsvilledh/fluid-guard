@@ -153,7 +153,9 @@ function createRpcContext(chain, fetchImpl) {
 
 async function rpcOnce(ctx, endpoint, method, params) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  // 20s per call: the scan's users are often on slow mobile networks,
+  // and a deliberate scan with a progress bar can afford the patience.
+  const timer = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await ctx.fetchImpl(endpoint.url, {
       method: "POST",
