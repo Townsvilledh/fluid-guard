@@ -32,12 +32,17 @@ export const firebaseConfig = {
 //   - Or set it to a fixed token string you have already registered.
 export const APP_CHECK_DEBUG_TOKEN = true;
 
-// Cloud model used for the opt-in deep analysis (overrides the SDK's default
-// hybrid fallback model, gemini-3.5-flash-lite, for that route only).
-// gemini-2.5-flash is no longer available to new users on the Gemini
-// Developer API (the API returns 404 for it); gemini-3.8-flash is the
-// model the API itself directs new projects to.
-export const DEEP_ANALYSIS_MODEL = "gemini-3.8-flash";
+// Cloud model used for the opt-in deep analysis.
+// Originally gemini-3.8-flash (the model the API directed new projects to;
+// gemini-2.5-flash 404s for new users). On 2026-11-21/22 the 3.8-flash
+// route failed 11 consecutive deep-analysis calls — zero-byte HTTP 200s,
+// 500/503s, generations that never completed — while gemini-3.5-flash-lite
+// kept serving in the same sessions. The deep route was moved to
+// gemini-3.5-flash-lite on 2026-11-22 after an end-to-end proof on a
+// scratch build (deep result rendered, routing panel recorded in_cloud,
+// ~2.2 s, inside the 45 s timeout). Deep analysis stays ONLY_IN_CLOUD and
+// user-triggered on an approved redacted summary; only the model changed.
+export const DEEP_ANALYSIS_MODEL = "gemini-3.5-flash-lite";
 
 // reCAPTCHA site key for App Check in a production build (from the Firebase
 // console: Security -> App Check -> register the reCAPTCHA provider).
